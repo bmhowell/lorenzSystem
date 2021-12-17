@@ -41,20 +41,22 @@ def fLorenz(time, param, sigma, rho, beta):
 ##################################### Numerical Methods ###########################################
 ###################################################################################################
 
-def fEuler(xSol_):
+def fEuler(xSol_, tSim, dt):
     # Forward Euler (WORKS GREAT)
+
     t = 0
     for i in range(0, int(tSim / dt) - 1):
-        xSol_[:, i + 1] = xSol_[:, i, :] + dt * fLorenz(t, xSol_[:, i, :], sigma, rho, beta)
-    
+        t += dt
+        xSol_[:, i + 1, :] = xSol_[:, i, :] + dt * fLorenz(t, xSol_[:, i, :], sigma, rho, beta)
+
     return xSol_
 
-def RK4(xSol_):
+def RK4(xSol_, tSim, dt):
     # 4th Order Runge Kutta
     
     t = 0
     for i in range(0, int(tSim / dt) - 1):
-        t += 1
+        t += dt
         # print('i = ', i)
         # compute intermediary values
         k1 = fLorenz(t,          xSol_[:, i, :],               sigma, rho, beta)
@@ -65,7 +67,40 @@ def RK4(xSol_):
         # compute next time step
         xSol_[:, i + 1, :] = xSol_[:, i, :] + dt / 6 * (k1 + 2 * k2 + 2 * k3 + k4)
 
-        return xSol_
+    return xSol_
+
+def bEuler(xSol_, sigma, rho, beta, tSim, dt):
+    # backward Euler 
+    # y_{k+1} = y_{k} + h * f(t_{k+1}, y_{k+1})
+
+    t = 0
+    tol = 1e-6
+    for i in range(0, int(tSim / dt) - 1):
+        t += dt
+
+        # fixed point iteration to solve implicit scheme
+
+        err = 100                                                           # initialize error
+        counter = 0                                                         # set counter
+        xSol_0 = deepcopy(xSol_[:, i, :])                                   # set guess value    
+        while err > tol:
+            counter += 1
+
+            xSol_1 = xSol_0 + dt * fLorenz(t, xSol_0, sigma, rho, beta)
+            xSol_0 = deepcopy(xSol_1)
+            err = np.sum(np.linalg.norm(xSol_1 - xSol_0, axis=1))
+
+            if counter > 9:
+                print('--- Did not converge ---')
+                print('Error: {} \n'.format(err))
+                break
+
+        xSol_[:, i + 1, :] = xSol_0
+
+    return xSol_
+
+        
+
 
 
 ###################################################################################################
@@ -81,9 +116,9 @@ def plotTrajectory(xSol_):
     ax.axis('off')
     index = -1
     for i in range(nTraj):
-        ax.plot3D(xSol_[i, :index, 0], xSol_[i, :index, 1], xSol_[i, :index, 2], lw=1, c='black')
+        ax.plot3D(xSol_[i, :index, 0], xSol_[i, :index, 1], xSol_[i, :index, 2], lw=1, c='red')
         
-    ax.scatter(xSol[:, -1, 0], xSol[:, -1, 1], xSol[:, -1, 2], s=500, c='white')
+    ax.scatter(xSol[:, -1, 0], xSol[:, -1, 1], xSol[:, -1, 2], s=500, c='red')
     ax.set_xlabel('X (m)', fontsize=35)
     ax.set_ylabel('Y (m)', fontsize=35)
     ax.set_zlabel('Z (m)', fontsize=35)
@@ -92,9 +127,10 @@ def plotTrajectory(xSol_):
     ax.set_ylim((-35, 35))
     ax.set_zlim((5, 55))
     ax.set_title('Lorenz Sytem: {} particles, {} seconds, RK4'.format(nTraj, tSim), fontsize=25)
+    # ax.set_title('Sarange for Le Aneh YopuYopu', fontsize=55)
     ax.view_init(elev=35., azim=45)
 
-    ax.set_facecolor('xkcd:white')
+    ax.set_facecolor('xkcd:black')
     # ax.legend(['Particle Position'], fontsize=35)
     ax.view_init(10, 135)
 
@@ -108,14 +144,16 @@ def animate(xSol_):
 
     This requires ffmpeg installed on your computer!!!
 
-    for 1000 time steps, should take about 4-5 minutes
+    for 10 particles, 10 seconds, dt = 0.001, this takes about 1.5 minutes compile
     """
-
+    skip = 10
     def update(n):  # Function to create plot
+        
+        n = (skip * n) % len(xSol_[0, :, 0])
         for line, point, xi in zip(lines, points, xSol_):
             x, y, z = xi[:n].T
-            # line.set_data(x, y)
-            # line.set_3d_properties(z)
+            line.set_data(x, y)
+            line.set_3d_properties(z)
 
             point.set_data(x[-1:], y[-1:])
             point.set_3d_properties(z[-1:])
@@ -150,7 +188,7 @@ def animate(xSol_):
     ax.set_facecolor('xkcd:black')
     ax.legend(['Particle Position'])
     ax.view_init(30, 0.3 * 491)
-    anim = animation.FuncAnimation(fig, update, frames=len(xSol_[0, :, 0]), interval=50, blit=False)
+    anim = animation.FuncAnimation(fig, update, frames=int(len(xSol_[0, :, 0]) / skip), interval=50, blit=False)
 
     rc('animation', html='html5')
 
@@ -162,12 +200,11 @@ def animate(xSol_):
 ###################################################################################################
 ####################################### Simulation ################################################
 ###################################################################################################
-
 # sytem parameters
 sigma = 10.                                                 # system parameters 
 rho = 28.                                                   # system parameters
 beta = 8. / 3.                                              # system parameters
-dt = 0.001                                                  # time step
+dt = 0.0001                                                 # time step
 tSim = 10.                                                  # simulation time (s)
 
 # trajectory parameters
@@ -182,8 +219,10 @@ xSol[:, 0, :] = X0                                          # store initial posi
 
 if __name__ == "__main__":
     
-    # xSol = RK4(xSol)
-    xSol = fEuler(xSol)
+    # xSol = RK4(xSol, sigma, rho, beta, tSim, dt)
+    xSol = bEuler(xSol, sigma, rho, beta, tSim, dt)
     
-    # plotTrajectory(xSol)
-    # animate(xSol)
+    plotTrajectory(xSol)
+    animate(xSol)
+
+# %%
