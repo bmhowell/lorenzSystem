@@ -99,6 +99,94 @@ def bEuler(xSol_, sigma, rho, beta, tSim, dt):
 
     return xSol_
 
+def trapMidpoint(xSol_, sigma, rho, beta, tSim, dt):
+
+    t = 0 
+    tol = 1e-3      # fixed point iteration tolerance
+    phi = 0.5
+
+    Kd = 10
+    Zk = 10
+    p = 2
+    dtMax = 1e-4
+
+    for i in range(0, int(tSim / dt) - 1):
+        t += dt
+
+        # fixed point iteration to solve implicit scheme
+        """
+        dxdt = sigma * (y - x)
+        dydt = x * (rho - z) - y
+        dzdt = x * y - beta * z 
+        """
+        
+        counter = 0
+        err = 100
+
+        fxLast = fLorenz(t, xSol_[:, i, :], sigma, rho, beta)
+        Xtest = xSol_[:, i, :]
+
+        while Zk > 1:
+            K = 0
+            while K < Kd:
+                
+                Xtestnew = xSol_[:, i, :] + dt * (phi * fxLast + 
+                                                  (1 - phi) * fLorenz(t, Xtest, sigma, rho, beta))
+
+                if K == 0:
+                    Xtest = Xtestnew
+
+                elif K == 1:
+                    w0 = np.sum(np.linalg.norm(Xtestnew - xSol_[:, i, :], axis=1))
+                    wk = w0
+                    Zk = wk / tol
+
+                    LAMK = ((tol / w0) ** (1 / p * Kd)) / ((wk / w0) **(1 / (p * Kd)))
+
+
+                else:
+                    wk_num = np.sum(np.linalg.norm(Xtestnew - Xtest, axis=1))
+                    wk_den = np.sum(np.linalg.norm(Xtestnew - xSol_[:, i, :]))
+                    wk = wk_num / wk_den
+                    Zk = wk / tol 
+                    LAMK = ((tol / w0))
+
+                    Xtest = Xtestnew
+
+
+                if (Zk <= 1 and K < Kd):
+                    t += dt
+                    dt = LAMK * dt
+                    print('dt: ', dt)
+                    print('dtMax: ', dtMax)
+                    dt = np.minimum(dt, dtMax)
+                
+                    
+                    break
+                elif (Zk <= 1 and K == Kd):
+                    dt = LAMK * dt
+
+                elif np.isnan(Zk):
+                    dt = 0.2 * dt
+                    Zk = 10
+                    print('Zk is nan')
+
+                # else:
+                #     print('errror')
+                #     print('Zk: ', Zk)
+                #     nge = aldkj  
+
+                K += 1  
+
+                         
+
+
+
+                        
+            
+
+
+
         
 
 
@@ -109,6 +197,7 @@ def bEuler(xSol_, sigma, rho, beta, tSim, dt):
 
 def plotTrajectory(xSol_):
     # Plot final trajectories
+    print('xSol: ', xSol_[:, 0, 0])
     nTraj = len(xSol_[:, 0, 0])
 
     fig = plt.figure(figsize=(25, 20))
@@ -220,9 +309,11 @@ xSol[:, 0, :] = X0                                          # store initial posi
 if __name__ == "__main__":
     
     # xSol = RK4(xSol, sigma, rho, beta, tSim, dt)
-    xSol = bEuler(xSol, sigma, rho, beta, tSim, dt)
-    
-    plotTrajectory(xSol)
-    animate(xSol)
+    # xSol = bEuler(xSol, sigma, rho, beta, tSim, dt)
+    xSol = trapMidpoint(xSol, sigma, rho, beta, tSim, dt)
 
+    
+    # plotTrajectory(xSol)
+    # animate(xSol)
+ 
 # %%
